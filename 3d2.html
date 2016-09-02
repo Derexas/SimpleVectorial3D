@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<!--<h1>3D</h1>-->
+</head>
+<body>
+	<canvas id="world" width="600" height="300" style="border:1px solid #000000;">
+	</canvas>
+	<canvas id="topmap" width="600" height="300" style="border:1px solid #000000;">
+	</canvas>
+</body>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+<script type="text/javascript">
+$(document).ready(function() {
+	var c = document.getElementById("world");
+	var ctx = c.getContext("2d");
+	var mc = document.getElementById("topmap");
+	var mctx = mc.getContext("2d");
+	you = {pos: {x: 0, y: 0, z: 0}};
+	polys = [];
+	alpha = {}, alpha.x = 3, alpha.y = 0, 
+	alpha.d = Math.sqrt(alpha.x*alpha.x + alpha.y*alpha.y);
+
+	function addpoly(dots) {
+		var poly = [];
+		for(var i = 0; i < dots.length; i++) {
+			var dot = dots[i];
+			poly[i] = {x: dot[0], y: dot[1], z: dot[2]};
+		}
+		polys.push(poly);
+	}
+
+	function drawtopmap() {
+		mctx.clearRect(0, 0, c.width, c.height);
+		mctx.beginPath();
+		mctx.moveTo(c.width/2, c.height/2);
+		mctx.lineTo(c.width/2, c.height/2 + alpha.x);
+		mctx.lineTo(c.width/2 + alpha.y, c.height/2 + alpha.x);
+		mctx.lineTo(c.width/2, c.height/2);
+		mctx.closePath();
+		mctx.stroke();
+		for(var i = 0; i < polys.length; i++) {
+			mctx.beginPath();
+			var poly = polys[i];
+			var dot = poly[poly.length-1];
+			var x = dot.x-you.pos.x, 
+				z = dot.z-you.pos.z;
+			mctx.moveTo(x + c.width/2, z + c.height/2);
+			for(var j = 0; j < poly.length; j++) {
+				dot = poly[j];
+				x = dot.x-you.pos.x;
+				z = dot.z-you.pos.z;
+				mctx.fillText(dot.x+" "+dot.y+" "+dot.z, 
+					x + c.width/2, z + c.height/2);
+				mctx.lineTo(x + c.width/2, z + c.height/2);
+			}
+			mctx.closePath();
+			mctx.stroke();
+		}
+	}
+
+	function projectlines() {
+		ctx.clearRect(0, 0, c.width, c.height);
+		ctx.fillText(you.pos.x+" "+you.pos.y+" "+you.pos.z, 10, 20);
+		ctx.beginPath();
+		ctx.moveTo(0 + c.width/2, 0 + c.height/2);
+		for(var i = 0; i < dots.length; i++) {
+			var dot = dots[i];
+
+			
+			ctx.fillText(dot.x+" "+dot.y+" "+dot.z, 
+				x + c.width/2, y + c.height/2);
+			ctx.lineTo(x + c.width/2, y + c.height/2);
+		}
+		ctx.closePath();
+		ctx.stroke();
+	}
+
+	function referentialrotation(ddot) {
+		var dot = {};
+		dot.x = ddot.x,	dot.y = ddot.y, dot.z = ddot.z;
+		/// FUCKING MAGIC
+		var modifiedy = (dot.y*alpha.x - dot.x*alpha.y)/alpha.d;
+		var modifiedx = (dot.x*alpha.x + dot.y*alpha.y)/alpha.d;
+		dot.y = modifiedy,
+		dot.x = modifiedx;
+		// -------------*/
+		return dot;
+	}
+	// trying to turn and move the thing while still giving a special
+	// status to z and all, looking at the scene in the same way that
+	// if there was nothing
+	function projectpolys() {
+		drawtopmap();
+		var t0 = performance.now();
+		ctx.clearRect(0, 0, c.width, c.height);
+		ctx.fillText(you.pos.x+" "+you.pos.y+" "+you.pos.z, 10, 20);
+		for(var i = 0; i < polys.length; i++) {
+			ctx.beginPath();
+			var poly = polys[i];
+			var d = poly[poly.length-1];
+			var dot = referentialrotation(d);
+			var yourpos = referentialrotation(you.pos);
+			var x = alpha.d/(dot.z-yourpos.z) * (dot.x-yourpos.x), 
+				y = alpha.d/(dot.z-yourpos.z) * (dot.y-yourpos.y);
+			ctx.moveTo(x + c.width/2, y + c.height/2);
+			for(var j = 0; j < poly.length; j++) {
+				dot = referentialrotation(poly[j]);
+				yourpos = referentialrotation(you.pos);
+				x = alpha.d/(dot.z-yourpos.z) * (dot.x-yourpos.x);
+				y = alpha.d/(dot.z-yourpos.z) * (dot.y-yourpos.y);
+				ctx.fillText(d.x+" "+d.y+" "+d.z, 
+					x + c.width/2, y + c.height/2);
+				ctx.lineTo(x + c.width/2, y + c.height/2);
+			}
+			ctx.closePath();
+			ctx.stroke();
+		}
+		var t1 = performance.now();
+		console.log("Call to draw took "+(t1 - t0)+" milliseconds.");
+	}
+
+	function move(x, y, z) {
+		you.pos.x += x;
+		you.pos.y += y;
+		you.pos.z += z;
+		projectpolys();
+	}
+
+	function movelook(x, y, z) {
+		alpha.x += x;
+		alpha.y += y;
+		alpha.d = Math.sqrt(alpha.x*alpha.x + alpha.y*alpha.y);
+		projectpolys();
+	}
+
+	addpoly([[10,10,10], [0,20,10], [10,60,10], [60,10,20], 
+			[10,20,50], [40,10,30]]);
+	//cube
+	addpoly([[100,10,20], [150,10,20], [150,60,20], [100,60,20], 
+			[100,60,70], [150,60,70], [150,10,70], [100,10,70]]);
+
+	projectpolys();
+
+	$(window).bind('mousewheel DOMMouseScroll', function(event){
+		if (event.originalEvent.wheelDelta > 0 || event.originalEvent.detail < 0) {
+			alpha.x = Math.round(1.2*alpha.x);
+			alpha.y = Math.round(1.2*alpha.y);
+			alpha.d = Math.sqrt(alpha.x*alpha.x + alpha.y*alpha.y);
+			//move(0, 0, 1);
+		} else {
+			alpha.x = Math.round(alpha.x/1.2);
+			alpha.y = Math.round(alpha.y/1.2);
+			alpha.d = Math.sqrt(alpha.x*alpha.x + alpha.y*alpha.y);
+			//move(0, 0, -1);
+		}
+		projectpolys();
+	});
+
+	$(window).bind('keydown', function(e) {
+		console.log(e.which);
+		switch(e.which) {
+			case 37: // left
+			move(-1, 0, 0);
+			break;
+
+			case 38: // up
+			move(0, -1, 0);
+			break;
+
+			case 39: // right
+			move(1, 0, 0);
+			break;
+
+			case 40: // down
+			move(0, 1, 0);
+			break;
+
+			case 107: // forward
+			case 169:
+			move(0, 0, 1);
+			break;
+
+			case 109: // backward
+			case 61:
+			move(0, 0, -1);
+			break;
+
+			case 79: // o ?
+			movelook(0, -1, 0);
+			break;
+
+			case 80: // p ?
+			movelook(0, 1, 0);
+			break;
+
+			case 73: // i ?
+			movelook(-1, 0, 0);
+			break;
+
+			case 75: // k ?
+			movelook(1, 0, 0);
+			break;
+
+			default: return; // exit this handler for other keys
+		}
+		e.preventDefault(); // prevent the default action (scroll / move caret)
+	});
+
+});
+</script>
+</html>

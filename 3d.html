@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<!--<h1>3D</h1>-->
+</head>
+<body>
+	<canvas id="world" width="600" height="300" style="border:1px solid #000000;">
+	</canvas>
+	<canvas id="topmap" width="600" height="300" style="border:1px solid #000000;">
+	</canvas>
+</body>
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+<script type="text/javascript">
+$(document).ready(function() {
+	var c = document.getElementById("world");
+	var ctx = c.getContext("2d");
+	var mc = document.getElementById("topmap");
+	var mctx = mc.getContext("2d");
+	you = {pos: {x: 0, y: 0, z: 0}};
+	polys = [];
+	alpha = {}, alpha.x = 0, alpha.y = 0, alpha.z = 0, 
+	alpha.a = 0, alpha.b = 0, alpha.d = 0;
+
+	function addpoly(dots) {
+		var poly = [];
+		for(var i = 0; i < dots.length; i++) {
+			var dot = dots[i];
+			poly[i] = {x: dot[0], y: dot[1], z: dot[2]};
+		}
+		polys.push(poly);
+	}
+
+	function drawtopmap() {
+		mctx.clearRect(0, 0, c.width, c.height);
+		mctx.fillText("y -- z -- >", 10, 10);
+		mctx.fillText("|", 10, 20);
+		mctx.fillText("x", 10, 30);
+		mctx.fillText("|", 10, 40);
+		mctx.fillText("\\/", 10, 50);
+		mctx.beginPath();
+		mctx.moveTo(c.width/2, c.height/2);
+		mctx.lineTo(c.width/2 + alpha.x, c.height/2);
+		mctx.lineTo(c.width/2 + alpha.x, c.height/2 + alpha.z);
+		mctx.lineTo(c.width/2, c.height/2);
+		mctx.lineTo(c.width/2 + alpha.z, c.height/2 - alpha.x);
+		mctx.closePath();
+		mctx.fillText("z", c.width/2 + alpha.x, c.height/2 + alpha.z);
+		mctx.fillText("x", c.width/2 + alpha.z, c.height/2 - alpha.x);
+		mctx.fillText("y", c.width/2, c.height/2);
+		mctx.stroke();
+		for(var i = 0; i < polys.length; i++) {
+			mctx.beginPath();
+			var poly = polys[i];
+			var dot = poly[poly.length-1];
+			var xx = dot.x-you.pos.x, 
+				zz = dot.z-you.pos.z;
+			var x = (zz*alpha.x - xx*alpha.z)/alpha.d, 
+				z = (xx*alpha.x + zz*alpha.z)/alpha.d;
+			mctx.moveTo(x + c.width/2, z + c.height/2);
+			for(var j = 0; j < poly.length; j++) {
+				dot = poly[j];
+				xx = dot.x-you.pos.x, 
+				zz = dot.z-you.pos.z;
+				x = (zz*alpha.x - xx*alpha.z)/alpha.d, 
+				z = (xx*alpha.x + zz*alpha.z)/alpha.d;
+				mctx.fillText(dot.x+" "+dot.z+" "+dot.z, 
+					x + c.width/2, z + c.height/2);
+				mctx.lineTo(x + c.width/2, z + c.height/2);
+			}
+			mctx.closePath();
+			mctx.stroke();
+		}
+	}
+
+	function projectlines() {
+		ctx.clearRect(0, 0, c.width, c.height);
+		ctx.fillText(you.pos.x+" "+you.pos.y+" "+you.pos.z, 10, 20);
+		ctx.beginPath();
+		ctx.moveTo(0 + c.width/2, 0 + c.height/2);
+		for(var i = 0; i < dots.length; i++) {
+			var dot = dots[i];			
+			ctx.fillText(dot.x+" "+dot.y+" "+dot.z, 
+				x + c.width/2, y + c.height/2);
+			ctx.lineTo(x + c.width/2, y + c.height/2);
+		}
+		ctx.closePath();
+		ctx.stroke();
+	}
+
+	function referentialrotation(ddot) {
+		var dot = {};
+		dot.x = ddot.x,	dot.y = ddot.y, dot.z = ddot.z;
+		/// FUCKING MAGIC
+		//var modifiedy = (dot.y*alpha.x - dot.x*alpha.y)/alpha.d;
+		var modifiedz = (dot.z*alpha.x + dot.x*alpha.z)/alpha.d;
+		var modifiedx = (dot.x*alpha.x + dot.y*alpha.y)/alpha.d;
+		//dot.y = modifiedy
+		dot.z = modifiedz;
+		dot.x = modifiedx;
+		// -------------*/
+		return dot;
+	}
+
+	function projectpolys() {
+		drawtopmap();
+		var t0 = performance.now();
+		ctx.clearRect(0, 0, c.width, c.height);
+		ctx.fillText(you.pos.x+" "+you.pos.y+" "+you.pos.z+" "+
+			alpha.a+" "+alpha.b, 10, 20);
+		for(var i = 0; i < polys.length; i++) {
+			ctx.beginPath();
+			var poly = polys[i];
+			var d = poly[poly.length-1];
+			var dot = referentialrotation({
+				x: d.x-you.pos.x, 
+				y: d.y-you.pos.y, 
+				z: d.z-you.pos.z
+			});
+			console.log(dot.x, dot.y, dot.z);
+			var x = alpha.d/(dot.z) * (dot.x), 
+				y = alpha.d/(dot.z) * (dot.y);
+			ctx.moveTo(x + c.width/2, y + c.height/2);
+			for(var j = 0; j < poly.length; j++) {
+				var d = poly[j];
+				var dot = referentialrotation({
+					x: d.x-you.pos.x, 
+					y: d.y-you.pos.y, 
+					z: d.z-you.pos.z
+				});
+				if(dot.z <= 0) { //début essai calcul croisement plan/ligne vers point hors du champ de vision
+					xdot = d.x-you.pos.x, ydot = d.y-you.pos.y;
+					dtodot = Math.sqrt(xdot*xdot + ydot*ydot);
+					x = alpha.d*alpha.x*dtodot/alpha.y;
+					y = alpha.d*alpha.y*dtodot/alpha.x;
+				} else { //fin essai
+				var x = alpha.d/(dot.z) * (dot.x), 
+					y = alpha.d/(dot.z) * (dot.y);
+				}
+				ctx.fillText(d.x+" "+d.y+" "+d.z, 
+					x + c.width/2, y + c.height/2);
+				ctx.lineTo(x + c.width/2, y + c.height/2);
+			}
+			ctx.closePath();
+			ctx.stroke();
+		}
+		var t1 = performance.now();
+		//console.log("Call to draw took "+(t1 - t0)+" milliseconds.");
+	}
+
+	function move(x, y, z) {
+		you.pos.x += x;
+		you.pos.y += y;
+		you.pos.z += z;
+		projectpolys();
+	}
+
+	function movelook(a, b) {
+		alpha.a += a/(2*Math.PI);
+		alpha.b += b/(2*Math.PI);
+		alpha.x = Math.cos(alpha.a) * alpha.d;
+		//alpha.y = Math.sin(alpha.a) * alpha.d;
+		alpha.z = Math.sin(alpha.b) * alpha.d;
+		projectpolys();
+	}
+
+	function moved(d) {
+		alpha.d += d;
+		alpha.x = Math.cos(alpha.a) * alpha.d;
+		//alpha.y = Math.sin(alpha.a) * alpha.d;
+		alpha.z = Math.sin(alpha.b) * alpha.d;
+		projectpolys();
+	}
+
+	addpoly([[10,10,10], [0,20,10], [10,60,10], [60,10,20], 
+			[10,20,50], [40,10,30]]);
+	//cube
+	addpoly([[100,10,20], [150,10,20], [150,60,20], [100,60,20], 
+			[100,60,70], [150,60,70], [150,10,70], [100,10,70]]);
+
+	projectpolys();
+
+	$(window).bind('mousewheel DOMMouseScroll', function(event){
+		if (event.originalEvent.wheelDelta > 0 || event.originalEvent.detail < 0) {
+			moved(1);
+		} else {
+			moved(-1);
+		}
+	});
+
+	$(window).bind('keydown', function(e) {
+		console.log(e.which);
+		switch(e.which) {
+			case 37: // left
+			move(-1, 0, 0);
+			break;
+
+			case 38: // up
+			move(0, -1, 0);
+			break;
+
+			case 39: // right
+			move(1, 0, 0);
+			break;
+
+			case 40: // down
+			move(0, 1, 0);
+			break;
+
+			case 107: // forward
+			case 169:
+			move(0, 0, 1);
+			break;
+
+			case 109: // backward
+			case 61:
+			move(0, 0, -1);
+			break;
+
+			case 79: // o ?
+			movelook(0, -1);
+			break;
+
+			case 80: // p ?
+			movelook(0, 1);
+			break;
+
+			case 73: // i ?
+			movelook(-1, 0);
+			break;
+
+			case 75: // k ?
+			movelook(1, 0);
+			break;
+
+			case 76: // l ?
+			moved(-1);
+			break;
+
+			case 77: // m ?
+			moved(1);
+			break;
+
+			default: return; // exit this handler for other keys
+		}
+		e.preventDefault(); // prevent the default action (scroll / move caret)
+	});
+
+});
+</script>
+</html>
